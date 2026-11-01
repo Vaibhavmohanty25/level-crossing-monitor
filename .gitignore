@@ -1,0 +1,23 @@
+# Python environment and caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Secrets
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Downloaded models and input videos
+models/
+data/videos/
+
+# Generated incidents, screenshots, and reports
+data/runtime/
+
+# Temporary development files
+work/
+outputs/
+*.log

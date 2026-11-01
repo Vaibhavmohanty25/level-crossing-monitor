@@ -1,0 +1,8 @@
+opencv-python
+numpy
+ultralytics
+lap>=0.5.12
+ollama
+pydantic>=2
+httpx
+streamlit>=1.50,<2
