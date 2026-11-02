@@ -1,0 +1,14 @@
+# ByteTrack configuration.
+# track_buffer is measured in processed frames, not seconds.
+
+tracker_type: bytetrack
+
+track_high_thresh: 0.25
+track_low_thresh: 0.10
+new_track_thresh: 0.25
+
+# Previously the standard configuration retained lost tracks for 30 frames.
+track_buffer: 60
+
+match_thresh: 0.80
+fuse_score: true

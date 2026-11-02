@@ -1,6 +1,7 @@
-"""Track intrusion duration independently of video processing."""
+"""Track intrusion duration and escalation independently of video or UI."""
 
 import math
+import os
 from dataclasses import dataclass
 
 
@@ -18,8 +19,13 @@ class EscalationMonitor:
         self,
         persistent_after=3.0,
         prolonged_after=6.0,
-        missing_grace=1.0,
+        missing_grace=None,
     ):
+        if missing_grace is None:
+            missing_grace = float(
+                os.getenv("CROSSING_MISSING_GRACE", "1.0")
+            )
+
         values = (
             persistent_after,
             prolonged_after,
@@ -51,7 +57,7 @@ class EscalationMonitor:
         timestamp,
         closed,
     ):
-        """Update once per frame using tracked vehicle IDs."""
+        """Update once per frame; inside IDs must also be visible."""
 
         if not math.isfinite(timestamp) or timestamp < 0:
             raise ValueError(
@@ -59,7 +65,9 @@ class EscalationMonitor:
             )
 
         if timestamp < self.last_timestamp:
-            raise ValueError("Timestamps must not move backwards.")
+            raise ValueError(
+                "Timestamps must not move backwards."
+            )
 
         if not inside_ids.issubset(visible_ids):
             raise ValueError(
@@ -72,24 +80,28 @@ class EscalationMonitor:
             self.states.clear()
             return self.states
 
-        # End exited tracks or expire tracks missing too long.
         for track_id, state in list(self.states.items()):
             if track_id in inside_ids:
                 if (
                     state.missing
-                    and timestamp - state.last_seen > self.missing_grace
+                    and timestamp - state.last_seen
+                    > self.missing_grace
                 ):
                     del self.states[track_id]
 
             elif track_id in visible_ids:
-                # The vehicle is visible outside the zone.
+                # Confirmed outside observation ends the episode.
                 del self.states[track_id]
 
-            elif timestamp - state.last_seen > self.missing_grace:
+            elif (
+                timestamp - state.last_seen
+                > self.missing_grace
+            ):
                 del self.states[track_id]
 
             else:
-                # Keep the previous duration and level during grace.
+                # Retain the episode briefly without advancing
+                # its displayed duration while unseen.
                 state.missing = True
 
         for track_id in inside_ids:
