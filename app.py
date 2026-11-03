@@ -1,4 +1,4 @@
-"""Streamlit dashboard for tabletop crossing incidents."""
+"""Streamlit dashboard for crossing incidents."""
 
 import json
 import sqlite3
@@ -15,38 +15,27 @@ from crossing_monitor.dashboard_data import (
     filter_incidents,
     records_to_csv,
 )
-
 from crossing_monitor.storage import IncidentStore
-
+from crossing_monitor.history_page import main as history_page
+from crossing_monitor.heatmap_page import main as heatmap_page
 from crossing_monitor.ollama_analysis import (
     analyse_incident,
     ensure_table,
     save_report,
 )
 
-from crossing_monitor.history_page import (
-    main as history_page,
-)
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
 DATABASE_PATH = (
-    PROJECT_ROOT
-    / "data"
-    / "runtime"
-    / "incidents.db"
+    PROJECT_ROOT / "data" / "runtime" / "incidents.db"
 )
 
 REPORT_DIRECTORY = (
-    PROJECT_ROOT
-    / "data"
-    / "runtime"
-    / "reports"
+    PROJECT_ROOT / "data" / "runtime" / "reports"
 )
 
 MODEL = "qwen3-vl:2b-instruct"
-
 
 st.set_page_config(
     page_title="Crossing Incident Review",
@@ -107,8 +96,8 @@ def main():
     st.title("Crossing incident review")
 
     st.caption(
-        "Hot Wheels tabletop demonstration • "
-        "Saved incidents and evidence"
+        "Saved incidents, visual evidence, "
+        "and local AI analysis"
     )
 
     st.sidebar.header("Filters")
@@ -120,7 +109,8 @@ def main():
 
     if not DATABASE_PATH.is_file():
         st.info(
-            "Record an intrusion with the monitoring program first."
+            "Record an intrusion with the monitoring "
+            "program first."
         )
         return
 
@@ -139,8 +129,8 @@ def main():
 
     if not records:
         st.info(
-            "No incidents recorded yet. Close the simulated "
-            "crossing and move a car into it."
+            "No incidents recorded yet. Close the crossing "
+            "and move a vehicle into it."
         )
         return
 
@@ -235,9 +225,7 @@ def main():
     )
 
     if not filtered:
-        st.info(
-            "No incidents match these filters."
-        )
+        st.info("No incidents match these filters.")
         return
 
     st.subheader("Incident history")
@@ -336,9 +324,9 @@ def main():
         })
 
         st.caption(
-            "Opening the crossing, losing a track, "
-            "or stopping monitoring ends a record "
-            "without proving the car physically left."
+            "Opening the crossing, losing a track, or "
+            "stopping monitoring ends a record without "
+            "proving the car physically left."
         )
 
     with evidence_tab:
@@ -414,9 +402,7 @@ def main():
                 "visible_observations",
                 [],
             ):
-                st.write(
-                    f"• {observation}"
-                )
+                st.write(f"• {observation}")
 
             st.write("**Uncertainties**")
 
@@ -427,9 +413,7 @@ def main():
 
             if uncertainties:
                 for uncertainty in uncertainties:
-                    st.write(
-                        f"• {uncertainty}"
-                    )
+                    st.write(f"• {uncertainty}")
 
             else:
                 st.caption(
@@ -439,10 +423,7 @@ def main():
 
             st.download_button(
                 "Download analysis JSON",
-                json.dumps(
-                    report,
-                    indent=2,
-                ),
+                json.dumps(report, indent=2),
                 file_name=(
                     f"{selected}_analysis.json"
                 ),
@@ -456,9 +437,8 @@ def main():
             )
 
         st.caption(
-            f"Analysis uses {MODEL}. "
-            "Keep Ollama running. Existing reports "
-            "are replaced when regenerated."
+            f"Analysis uses {MODEL}. Keep Ollama running. "
+            "Existing reports are replaced when regenerated."
         )
 
         if st.button(
@@ -494,20 +474,29 @@ def main():
 
         if event["status"] != "closed":
             st.caption(
-                "End the active incident "
-                "before generating its report."
+                "End the active incident before "
+                "generating its report."
             )
 
 
-st.navigation([
-    st.Page(
-        main,
-        title="Incident review",
-        default=True,
-    ),
-    st.Page(
-        history_page,
-        title="Ask incident history",
-        url_path="history",
-    ),
-]).run()
+st.navigation(
+    [
+        st.Page(
+            main,
+            title="Incident review",
+            default=True,
+        ),
+        st.Page(
+            history_page,
+            title="Ask incident history",
+            url_path="history",
+        ),
+        st.Page(
+            heatmap_page,
+            title="Intrusion heatmap",
+            url_path="heatmap",
+        ),
+    ],
+    position="sidebar",
+    expanded=True,
+).run()

@@ -1,4 +1,4 @@
-"""Monitor a tabletop crossing and save incident evidence."""
+"""Monitor a crossing and save incident and spatial evidence."""
 
 import argparse
 import math
@@ -10,6 +10,7 @@ import cv2
 
 from crossing_monitor.detector import ObjectDetector
 from crossing_monitor.escalation import EscalationMonitor
+from crossing_monitor.heatmap import GridRecorder
 from crossing_monitor.recorder import IncidentRecorder
 from crossing_monitor.storage import IncidentStore
 from crossing_monitor.tracker import ObjectTracker
@@ -19,10 +20,7 @@ from crossing_monitor.zones import select_zone
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 DEFAULT_VIDEO = (
-    PROJECT_ROOT
-    / "data"
-    / "videos"
-    / "sample.mp4"
+    PROJECT_ROOT / "data" / "videos" / "sample.mp4"
 )
 
 WINDOW_NAME = "Level Crossing Monitor"
@@ -93,6 +91,7 @@ def preview_video(
     zone = None
     store = None
     recorder = None
+    heatmap = None
 
     escalation = EscalationMonitor()
 
@@ -135,9 +134,14 @@ def preview_video(
         )
 
         if monitor:
+            # Save an unannotated reference for this session.
+            reference_frame = fit_frame(
+                raw_frame
+            ).copy()
+
             zone = select_zone(
                 WINDOW_NAME,
-                fit_frame(raw_frame),
+                reference_frame,
             )
 
             if zone is None:
@@ -148,9 +152,7 @@ def preview_video(
 
         if monitor:
             runtime = (
-                PROJECT_ROOT
-                / "data"
-                / "runtime"
+                PROJECT_ROOT / "data" / "runtime"
             )
 
             store = IncidentStore(
@@ -169,8 +171,21 @@ def preview_video(
                 source_name,
             )
 
+            heatmap = GridRecorder(
+                store,
+                source_name,
+                reference_frame,
+                zone.points,
+            )
+
             print(
-                f"Incident database: {store.path.resolve()}"
+                "Heatmap session: "
+                f"{heatmap.session_id[:8]}"
+            )
+
+            print(
+                "Incident database: "
+                f"{store.path.resolve()}"
             )
 
         crossing_closed = False
@@ -183,8 +198,6 @@ def preview_video(
             frame = fit_frame(raw_frame)
             frame_count += 1
 
-            # Live camera: elapsed PC receipt time.
-            # Recording: constant-frame-rate source time.
             timestamp = (
                 received_at - start_clock
                 if is_camera
@@ -272,9 +285,9 @@ def preview_video(
                 if states:
                     highest = max(
                         states.values(),
-                        key=lambda state: LEVEL_RANK[
-                            state.level
-                        ],
+                        key=lambda state: (
+                            LEVEL_RANK[state.level]
+                        ),
                     )
 
                     status = (
@@ -371,14 +384,8 @@ def preview_video(
                     ),
                 ]
 
-            draw_status(
-                frame,
-                lines,
-                color,
-            )
+            draw_status(frame, lines, color)
 
-            # Save the annotated frame after drawing the
-            # zone, tracking labels, and crossing status.
             if recorder is not None:
                 recorder.sync(
                     states,
@@ -388,10 +395,23 @@ def preview_video(
                     timestamp,
                 )
 
-            cv2.imshow(
-                WINDOW_NAME,
-                frame,
-            )
+                # Only currently visible intrusion tracks
+                # contribute to spatial occupancy.
+                heatmap.update(
+                    timestamp,
+                    {
+                        track_id: (
+                            recorder.active[
+                                track_id
+                            ].incident_id,
+                            vehicle_boxes[track_id],
+                        )
+                        for track_id in inside_ids
+                        if track_id in recorder.active
+                    },
+                )
+
+            cv2.imshow(WINDOW_NAME, frame)
 
             key = cv2.waitKey(delay_ms) & 0xFF
 
@@ -423,6 +443,9 @@ def preview_video(
                 if recorder is not None:
                     recorder.finish_all()
 
+                if heatmap is not None:
+                    heatmap.finish()
+
                 report = (
                     PROJECT_ROOT
                     / "data"
@@ -433,7 +456,6 @@ def preview_video(
 
                 try:
                     store.export_csv(report)
-
                     print(
                         f"Incident report: {report}"
                     )
@@ -451,7 +473,7 @@ def preview_video(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Tabletop crossing monitoring."
+        description="Crossing monitoring."
     )
 
     sources = parser.add_mutually_exclusive_group()
